@@ -5,6 +5,7 @@ include(CheckIPOSupported)
 
 option(NINJA_BUILD_BINARY "Build ninja binary" ON)
 option(NINJA_FORCE_PSELECT "Use pselect() even on platforms that provide ppoll()" OFF)
+option(NINJA_BUILD_FRAMEWORK "Build ninja as a framework (ios_system)" ON)
 
 project(ninja CXX)
 
@@ -190,6 +191,13 @@ if(NINJA_BUILD_BINARY)
 	if(WIN32)
 		target_sources(ninja PRIVATE windows/ninja.manifest)
 	endif()
+endif()
+
+# Similarly for ios_system but as a framework
+if(NINJA_BUILD_FRAMEWORK)
+	add_library(ninja src/ninja.cc)
+	add_compile_definitions(IOS_SYSTEM)
+	target_link_libraries(ninja PRIVATE libninja libninja-re2c)
 endif()
 
 # Adds browse mode into the ninja binary if it's supported by the host platform.
