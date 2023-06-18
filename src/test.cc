@@ -34,6 +34,13 @@
 #include "manifest_parser.h"
 #include "util.h"
 
+#ifdef IOS_SYSTEM
+extern "C" {
+extern int ios_system(char* cmd);
+#define system ios_system
+}
+#endif
+
 #ifdef _AIX
 extern "C" {
         // GCC "helpfully" strips the definition of mkdtemp out on AIX.
@@ -230,7 +237,7 @@ void ScopedTempDir::Cleanup() {
 #else
   string command = "rm -rf " + temp_dir_name_;
 #endif
-  if (system(command.c_str()) < 0)
+  if (system((char*)command.c_str()) < 0)
     Fatal("system: %s", strerror(errno));
 
   temp_dir_name_.clear();

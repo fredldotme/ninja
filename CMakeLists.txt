@@ -6,6 +6,13 @@ include(CheckIPOSupported)
 option(NINJA_BUILD_BINARY "Build ninja binary" ON)
 option(NINJA_FORCE_PSELECT "Use pselect() even on platforms that provide ppoll()" OFF)
 option(NINJA_BUILD_FRAMEWORK "Build ninja as a framework (ios_system)" ON)
+set(IOS_SYSTEM_FRAMEWORK "/Users/alfredneumayer/Projects/open/Tide/3rdparty/llvm/build-iphoneos/build/Release-iphoneos"  CACHE STRING "Path containing ios_system.framework")
+
+if(NINJA_BUILD_FRAMEWORK)
+	add_compile_definitions(IOS_SYSTEM)
+	message(WARNING "Looking for ios_system at: ${IOS_SYSTEM_FRAMEWORK}")
+	find_library(IOS_SYSTEM REQUIRED NAMES ios_system PATHS ${IOS_SYSTEM_FRAMEWORK} CMAKE_FIND_ROOT_PATH_BOTH)
+endif()
 
 project(ninja CXX)
 
@@ -195,9 +202,8 @@ endif()
 
 # Similarly for ios_system but as a framework
 if(NINJA_BUILD_FRAMEWORK)
-	add_library(ninja src/ninja.cc)
-	add_compile_definitions(IOS_SYSTEM)
-	target_link_libraries(ninja PRIVATE libninja libninja-re2c)
+	add_library(ninjaexe SHARED src/ninja.cc)
+	target_link_libraries(ninjaexe PRIVATE libninja libninja-re2c ${IOS_SYSTEM})
 endif()
 
 # Adds browse mode into the ninja binary if it's supported by the host platform.
@@ -256,7 +262,7 @@ if(BUILD_TESTING)
   if(WIN32)
     target_sources(ninja_test PRIVATE src/includes_normalize_test.cc src/msvc_helper_test.cc)
   endif()
-  target_link_libraries(ninja_test PRIVATE libninja libninja-re2c)
+  target_link_libraries(ninja_test PRIVATE libninja libninja-re2c ${IOS_SYSTEM})
 
   foreach(perftest
     build_log_perftest
@@ -267,7 +273,7 @@ if(BUILD_TESTING)
     manifest_parser_perftest
   )
     add_executable(${perftest} src/${perftest}.cc)
-    target_link_libraries(${perftest} PRIVATE libninja libninja-re2c)
+    target_link_libraries(${perftest} PRIVATE libninja libninja-re2c ${IOS_SYSTEM})
   endforeach()
 
   if(CMAKE_SYSTEM_NAME STREQUAL "AIX" AND CMAKE_SIZEOF_VOID_P EQUAL 4)

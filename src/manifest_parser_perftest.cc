@@ -40,6 +40,13 @@
 #include "state.h"
 #include "util.h"
 
+#ifdef IOS_SYSTEM
+extern "C" {
+extern int ios_system(char* cmd);
+#define system ios_system
+}
+#endif
+
 using namespace std;
 
 bool WriteFakeManifests(const string& dir, string* err) {
@@ -50,7 +57,7 @@ bool WriteFakeManifests(const string& dir, string* err) {
 
   string command = "python misc/write_fake_manifests.py " + dir;
   printf("Creating manifest data..."); fflush(stdout);
-  int exit_code = system(command.c_str());
+  int exit_code = system((char*)command.c_str());
   printf("done.\n");
   if (exit_code != 0)
     *err = "Failed to run " + command;
