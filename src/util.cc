@@ -60,6 +60,23 @@
 
 #include "edit_distance.h"
 
+#ifdef IOS_SYSTEM
+#undef stdin
+#undef stdout
+#undef stderr
+#undef exit
+extern "C" {
+extern __thread FILE* nosystem_stdin;
+extern __thread FILE* nosystem_stdout;
+extern __thread FILE* nosystem_stderr;
+extern void nosystem_exit(int exit_code);
+};
+#define stdin nosystem_stdin
+#define stdout nosystem_stdout
+#define stderr nosystem_stderr
+#define exit nosystem_exit
+#endif
+
 using namespace std;
 
 void Fatal(const char* msg, ...) {

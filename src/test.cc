@@ -36,8 +36,8 @@
 
 #ifdef IOS_SYSTEM
 extern "C" {
-extern int ios_system(char* cmd);
-#define system ios_system
+extern int nosystem_system(char* cmd);
+#define system nosystem_system
 }
 #endif
 

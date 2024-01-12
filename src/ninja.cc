@@ -62,6 +62,23 @@ int MSVCHelperMain(int argc, char** argv);
 void CreateWin32MiniDump(_EXCEPTION_POINTERS* pep);
 #endif
 
+#ifdef IOS_SYSTEM
+#undef stdin
+#undef stdout
+#undef stderr
+#undef exit
+extern "C" {
+extern __thread FILE* nosystem_stdin;
+extern __thread FILE* nosystem_stdout;
+extern __thread FILE* nosystem_stderr;
+extern void nosystem_exit(int exit_code);
+};
+#define stdin nosystem_stdin
+#define stdout nosystem_stdout
+#define stderr nosystem_stderr
+#define exit nosystem_exit
+#endif
+
 namespace {
 
 struct Tool;
@@ -663,7 +680,7 @@ int NinjaMain::ToolRules(const Options* options, int argc, char* argv[]) {
   typedef map<string, const Rule*> Rules;
   const Rules& rules = state_.bindings_.GetRules();
   for (Rules::const_iterator i = rules.begin(); i != rules.end(); ++i) {
-    printf("%s", i->first.c_str());
+    fprintf(stdout, "%s", i->first.c_str());
     if (print_description) {
       const Rule* rule = i->second;
       const EvalString* description = rule->GetBinding("description");
@@ -671,7 +688,7 @@ int NinjaMain::ToolRules(const Options* options, int argc, char* argv[]) {
         printf(": %s", description->Unparse().c_str());
       }
     }
-    printf("\n");
+    fprintf(stdout, "\n");
     fflush(stdout);
   }
   return 0;
@@ -1493,7 +1510,8 @@ int ReadFlags(int* argc, char*** argv,
         options->working_dir = optarg;
         break;
       case OPT_VERSION:
-        printf("%s\n", kNinjaVersion);
+        fprintf(stdout, "%s\n", kNinjaVersion);
+        fflush(stdout);
         return 0;
       case 'h':
       default:
@@ -1516,7 +1534,9 @@ NORETURN void real_main(int argc, char** argv) {
   options.input_file = "build.ninja";
   options.dupe_edges_should_err = true;
 
+#ifndef IOS_SYSTEM
   setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
+#endif
   const char* ninja_command = argv[0];
 
   int exit_code = ReadFlags(&argc, &argv, &options, &config);
@@ -1602,7 +1622,12 @@ NORETURN void real_main(int argc, char** argv) {
 
 }  // anonymous namespace
 
-int main(int argc, char** argv) {
+#ifdef IOS_SYSTEM
+int ninja_main(int argc, char** argv)
+#else
+int main(int argc, char** argv)
+#endif
+{
 #if defined(_MSC_VER)
   // Set a handler to catch crashes not caught by the __try..__except
   // block (e.g. an exception in a stack-unwind-block).

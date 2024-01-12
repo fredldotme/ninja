@@ -30,6 +30,18 @@
 #include <sys/select.h>
 #endif
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+extern "C" {
+extern int nosystem_system(const char* cmd);
+extern __thread FILE* nosystem_stdin;
+extern __thread FILE* nosystem_stdout;
+extern __thread FILE* nosystem_stderr;
+};
+#endif
+#endif
+
 extern char** environ;
 
 #include "util.h"
@@ -41,11 +53,13 @@ Subprocess::Subprocess(bool use_console) : fd_(-1), pid_(-1),
 }
 
 Subprocess::~Subprocess() {
-  if (fd_ >= 0)
-    close(fd_);
-  // Reap child if forgotten.
-  if (pid_ != -1)
-    Finish();
+    try {
+        if (fd_ >= 0)
+            close(fd_);
+        // Reap child if forgotten.
+        if (pid_ != -1)
+            Finish();
+    } catch (const std::exception&) {}
 }
 
 bool Subprocess::Start(SubprocessSet* set, const string& command) {
@@ -61,6 +75,7 @@ bool Subprocess::Start(SubprocessSet* set, const string& command) {
 #endif  // !USE_PPOLL
   SetCloseOnExec(fd_);
 
+#if !TARGET_OS_IPHONE
   posix_spawn_file_actions_t action;
   int err = posix_spawn_file_actions_init(&action);
   if (err != 0)
@@ -131,10 +146,63 @@ bool Subprocess::Start(SubprocessSet* set, const string& command) {
     Fatal("posix_spawn_file_actions_destroy: %s", strerror(err));
 
   close(output_pipe[1]);
+#else
+    std::vector<char> tempOutput;
+    std::vector<char> tempError;
+    
+    FILE* bak1 = nosystem_stdout;
+    FILE* bak2 = nosystem_stderr;
+    
+    FILE* outWriteEnd = NULL;
+    FILE* errWriteEnd = NULL;
+    
+    FILE* outReadEnd = NULL;
+    FILE* errReadEnd = NULL;
+    
+    int fdOut[2] = {0};
+    int fdErr[2] = {0};
+    
+    pipe(fdOut);
+    outReadEnd = fdopen(fdOut[0], "r");
+    outWriteEnd = fdopen(fdOut[1], "w");
+    
+    pipe(fdErr);
+    errReadEnd = fdopen(fdErr[0], "r");
+    errWriteEnd = fdopen(fdErr[1], "w");
+
+    fcntl(fileno(outReadEnd), F_SETFL, fcntl(fileno(outReadEnd), F_GETFL) | O_NONBLOCK);
+    fcntl(fileno(errReadEnd), F_SETFL, fcntl(fileno(errReadEnd), F_GETFL) | O_NONBLOCK);
+
+    nosystem_stdout = outWriteEnd;
+    nosystem_stderr = errWriteEnd;
+    
+    tempOutput.resize(4096);
+    tempError.resize(4096);
+
+    std::string syscmd = command;
+    char cwd[PATH_MAX];
+    getcwd(cwd, sizeof(cwd));
+    const int ret = nosystem_system(syscmd.c_str());
+    chdir(cwd);
+    fflush(outWriteEnd);
+    fflush(errWriteEnd);
+    pid_ = -1;
+
+    const int nout = read(fileno(outReadEnd), tempOutput.data(), tempOutput.size());
+    tempOutput.resize(std::max(nout, 0));
+    buf_.assign(tempOutput.begin(), tempOutput.end());
+
+    fclose(outReadEnd);
+    fclose(outWriteEnd);
+    fclose(errReadEnd);
+    fclose(errWriteEnd);
+    
+#endif
   return true;
 }
 
 void Subprocess::OnPipeReady() {
+#if !TARGET_OS_IPHONE
   char buf[4 << 10];
   ssize_t len = read(fd_, buf, sizeof(buf));
   if (len > 0) {
@@ -145,6 +213,7 @@ void Subprocess::OnPipeReady() {
     close(fd_);
     fd_ = -1;
   }
+#endif
 }
 
 ExitStatus Subprocess::Finish() {
@@ -244,7 +313,11 @@ Subprocess *SubprocessSet::Add(const string& command, bool use_console) {
     delete subprocess;
     return 0;
   }
+#if !TARGET_OS_IPHONE
   running_.push_back(subprocess);
+#else
+  finished_.push(subprocess);
+#endif
   return subprocess;
 }
 
@@ -300,6 +373,7 @@ bool SubprocessSet::DoWork() {
 
 #else  // !defined(USE_PPOLL)
 bool SubprocessSet::DoWork() {
+#if !TARGET_OS_IPHONE
   fd_set set;
   int nfds = 0;
   FD_ZERO(&set);
@@ -327,11 +401,15 @@ bool SubprocessSet::DoWork() {
   HandlePendingInterruption();
   if (IsInterrupted())
     return true;
+#endif
 
   for (vector<Subprocess*>::iterator i = running_.begin();
        i != running_.end(); ) {
     int fd = (*i)->fd_;
-    if (fd >= 0 && FD_ISSET(fd, &set)) {
+#if !TARGET_OS_IPHONE
+    if (fd >= 0 && FD_ISSET(fd, &set))
+#endif
+    {
       (*i)->OnPipeReady();
       if ((*i)->Done()) {
         finished_.push(*i);
@@ -342,7 +420,11 @@ bool SubprocessSet::DoWork() {
     ++i;
   }
 
+#if !TARGET_OS_IPHONE
   return IsInterrupted();
+#else
+  return false;
+#endif
 }
 #endif  // !defined(USE_PPOLL)
 

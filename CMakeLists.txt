@@ -6,12 +6,13 @@ include(CheckIPOSupported)
 option(NINJA_BUILD_BINARY "Build ninja binary" ON)
 option(NINJA_FORCE_PSELECT "Use pselect() even on platforms that provide ppoll()" OFF)
 option(NINJA_BUILD_FRAMEWORK "Build ninja as a framework (ios_system)" ON)
-set(IOS_SYSTEM_FRAMEWORK "/Users/alfredneumayer/Projects/open/Tide/3rdparty/llvm/build-iphoneos/build/Release-iphoneos"  CACHE STRING "Path containing ios_system.framework")
+set(IOS_SYSTEM_FRAMEWORK "" CACHE STRING "Path containing ios_system.framework")
 
 if(NINJA_BUILD_FRAMEWORK)
-	add_compile_definitions(IOS_SYSTEM)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version" FORCE)
+	add_compile_definitions(IOS_SYSTEM stdout=nosystem_stdout stderr=nosystem_stderr)
 	message(WARNING "Looking for ios_system at: ${IOS_SYSTEM_FRAMEWORK}")
-	find_library(IOS_SYSTEM REQUIRED NAMES ios_system PATHS ${IOS_SYSTEM_FRAMEWORK} CMAKE_FIND_ROOT_PATH_BOTH)
+	find_library(IOS_SYSTEM REQUIRED NAMES nosystem PATHS ${IOS_SYSTEM_FRAMEWORK} CMAKE_FIND_ROOT_PATH_BOTH)
 endif()
 
 project(ninja CXX)
@@ -163,7 +164,7 @@ if(WIN32)
 	set_source_files_properties(src/getopt.c PROPERTIES LANGUAGE CXX)
 else()
 	target_sources(libninja PRIVATE src/subprocess-posix.cc)
-	if(CMAKE_SYSTEM_NAME STREQUAL "OS400" OR CMAKE_SYSTEM_NAME STREQUAL "AIX")
+	if(CMAKE_SYSTEM_NAME STREQUAL "OS400" OR CMAKE_SYSTEM_NAME STREQUAL "AIX" OR NINJA_BUILD_FRAMEWORK)
 		target_sources(libninja PRIVATE src/getopt.c)
 		# Build getopt.c, which can be compiled as either C or C++, as C++
 		# so that build environments which lack a C compiler, but have a C++
@@ -203,6 +204,15 @@ endif()
 # Similarly for ios_system but as a framework
 if(NINJA_BUILD_FRAMEWORK)
 	add_library(ninjaexe SHARED src/ninja.cc)
+    set_target_properties(ninjaexe PROPERTIES
+            FRAMEWORK TRUE
+            MACOSX_FRAMEWORK_IDENTIFIER me.fredl.ninja
+            MACOSX_FRAMEWORK_BUNDLE_VERSION 1.0.0
+            MACOSX_FRAMEWORK_SHORT_VERSION_STRING 1.0
+            MACOSX_BUNDLE_BUNDLE_VERSION 1.0.0
+            MACOSX_BUNDLE_SHORT_VERSION_STRING 1.0
+            XCODE_ATTRIBUTE_SKIP_INSTALL "Yes"
+    )
 	target_link_libraries(ninjaexe PRIVATE libninja libninja-re2c ${IOS_SYSTEM})
 endif()
 
