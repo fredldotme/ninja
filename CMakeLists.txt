@@ -5,7 +5,7 @@ include(CheckIPOSupported)
 
 option(NINJA_BUILD_BINARY "Build ninja binary" ON)
 option(NINJA_FORCE_PSELECT "Use pselect() even on platforms that provide ppoll()" OFF)
-option(NINJA_BUILD_FRAMEWORK "Build ninja as a framework (ios_system)" ON)
+option(NINJA_BUILD_FRAMEWORK "Build ninja as a framework (ios_system)" OFF)
 set(IOS_SYSTEM_FRAMEWORK "" CACHE STRING "Path containing ios_system.framework")
 
 if(NINJA_BUILD_FRAMEWORK)
